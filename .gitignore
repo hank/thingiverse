@@ -7,5 +7,11 @@
 dist
 build
 sdist
+CLIENTSECRET
+ACCESSTOKEN
+images
+thing_comments_json
+thing_json
+files
 
 *.sqlite3

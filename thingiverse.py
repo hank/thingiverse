@@ -2,12 +2,12 @@
 import sys
 from rauth import OAuth2Service
 import webbrowser
-import urllib2
+import urllib
 from time import sleep
 import json
-import requests
 import logging
-
+import requests
+from requests.packages.urllib3.util.retry import Retry
 
 class Thingiverse:
 
@@ -28,7 +28,7 @@ class Thingiverse:
 
         self._appinfo = appinfo
         self._service = 0
-        self._access_code = ''
+        self._access_token = ''
         self._session = 0
 
         self._r2 = 0
@@ -48,21 +48,35 @@ class Thingiverse:
 
     # HTTP Request Helpers
 
-    def _get_it(self, endpoint, data):
-        r = self._session.get(self._service.base_url + endpoint, params=data)
-        return r.json()
+    def get_it(self, endpoint, data=None):
+        logging.debug("GET {}".format(endpoint))
+        if '//' not in endpoint:
+            url = self._service.base_url + endpoint
+            r = self._session.get(url, params=data)
+            # Handle stupid errors
+            if 'default backend -' in r.text:
+                print("Stupid error")
+                return None
+            else:
+                return r.json()
+        else:
+            url = endpoint
+            r = self._session.get(url, params=data)
+            return r
 
     def _post_it(self, endpoint, data):
+        logging.debug("POST {}".format(endpoint))
         r = self._session.post(self._service.base_url + endpoint, data=data)
         return r.json()
 
     def _delete_it(self, endpoint, data):
+        logging.debug("DELETE {}".format(endpoint))
         r = self._session.delete(self._service.base_url + endpoint, data=data)
         return r.json()
 
     def _patch_it(self, endpoint, data):
-
-        # headers = {'Authorization: Bearer': self._access_code,
+        logging.debug("PATCH {}".format(endpoint))
+        # headers = {'Authorization: Bearer': self._access_token,
         #             'Host': 'api.thingiverse.com',
         #             'Content-Type': 'application/json'}
 
@@ -74,20 +88,11 @@ class Thingiverse:
 
     def _fetch_access_code(self):
         logging.debug('fetch_access_code')
-        self._access_code = raw_input("access token: >")
+        self._access_token = input("access token: >")
 
     def _get_access_code(self, token=''):
         logging.debug('get_access_code')
 
-        # self._service = OAuth2Service(
-        #     name='thingiverse',
-        #     client_id='719ce807b9ceac053033',
-        #     client_secret='45d1bb0958c45b7716e671ebe5723ace',
-        #     access_token_url='https://www.thingiverse.com/login/oauth/access_token',
-        #     authorize_url='https://www.thingiverse.com/login/oauth/authorize',
-        #     base_url='https://api.thingiverse.com')
-
-        # perplexedphoenix
         self._service = OAuth2Service(
             name='thingiverse',
             client_id=self._appinfo['client_id'],
@@ -99,7 +104,7 @@ class Thingiverse:
         if not token:
             # let's get the url to go to
             params = {'redirect_uri': self._appinfo['redirect_uri'],
-                      'response_type': 'code'}
+                      'response_type': 'token'}
             url = self._service.get_authorize_url(**params)
 
             # nope
@@ -132,13 +137,29 @@ class Thingiverse:
 
             data = {'client_id': self._service.client_id,
                     'client_secret': self._service.client_secret,
-                    'code': self._access_code}
+                    'token': self._access_token}
 
             logging.debug(data)
 
             try:
                 self._session = self._service.get_auth_session(data=data)
                 logging.debug(self._session.access_token)
+
+                logging.debug("Setting retries through adapter")
+                retries = 20
+                backoff_factor = 0.3
+                status_forcelist=(500, 502, 504)
+                retry = Retry(
+                    total=retries,
+                    read=retries,
+                    connect=retries,
+                    backoff_factor=backoff_factor,
+                    status_forcelist=status_forcelist,
+                )
+                adapter = HTTPAdapter(max_retries=retry)
+                self._session.mount('http://', adapter)
+                self._session.mount('https://', adapter)
+
             except KeyError as e:
                 logging.debug(str(e))
                 logging.debug('key error, going to try to get it again')
@@ -300,7 +321,7 @@ class Thingiverse:
         """
         logging.debug('get_profile')
         s = "/users/%s" % user
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def update_profile(self, user, data):
         """
@@ -325,7 +346,7 @@ class Thingiverse:
         """
         logging.debug('get_things_user')
         s = "/users/%s/things" % (user)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_likes_user(self, user):
         """
@@ -335,7 +356,7 @@ class Thingiverse:
         """
         logging.debug('get_likes_user')
         s = "/users/%s/likes" % (user)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_copies_user(self, user):
         """
@@ -345,7 +366,7 @@ class Thingiverse:
         """
         logging.debug('get_copies_user')
         s = "/users/%s/copies" % (user)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_collections_user(self, user):
         """
@@ -355,7 +376,7 @@ class Thingiverse:
         """
         logging.debug('get_collections_user')
         s = "/users/%s/collections" % (user)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_downloads_user(self, user):
         """
@@ -365,7 +386,7 @@ class Thingiverse:
         """
         logging.debug('get_downloads_user')
         s = "/users/%s/downloads" % (user)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def add_apn(self, user, data):
         """
@@ -385,7 +406,7 @@ class Thingiverse:
         """
         logging.debug('get_tokens_user')
         s = "/users/%s/downloads" % (user)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def remove_apn(self, user, data):
         """
@@ -453,17 +474,28 @@ class Thingiverse:
         """
         logging.debug('get_thing')
         s = "/things/%d/" % (thing)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
-    def get_thing_image(self, thing, img):
+    def get_thing_image(self, thing, img=None):
         """
         get summary info for all the images of a thing,
         or more detailed info about a specific image
         returns an array of imagess or detailed info
         """
         logging.debug('get_thing_image')
-        s = "/things/%d/images/%d" % (thing, img)
-        return self._get_it(s, None)
+        if img:
+            s = "/things/%d/images/%d" % (thing, img)
+        else:
+            s = "/things/%d/images" % (thing)
+        return self.get_it(s, None)
+
+    def get_thing_comments(self, thing):
+        """
+        get threaded comments
+        """
+        logging.debug('threaded-comments')
+        s = "/things/%d/threaded-comments" % (thing)
+        return self.get_it(s, None)
 
     def update_thing_image(self, thing, img, data):
         """
@@ -485,7 +517,7 @@ class Thingiverse:
         s = "/things/%d/images/%d" % (thing, img)
         return self._delete_it(s, None)
 
-    def get_thing_file(self, thing, file_id):
+    def get_thing_file(self, thing, file_id=None):
         """
         get list of files on a thing,
         or with the numeric id, get more detailed info about a specific file
@@ -498,7 +530,7 @@ class Thingiverse:
         else:
             s = "/things/%d/files/%d" % (thing, file_id)
 
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def delete_thing_file(self, thing, file_id):
         """
@@ -516,7 +548,7 @@ class Thingiverse:
         """
         logging.debug('get_thing_likes')
         s = "/things/%d/likes" % (thing)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_thing_ancestors(self, thing):
         """
@@ -525,7 +557,7 @@ class Thingiverse:
         """
         logging.debug('get_thing_ancestors')
         s = "/things/%d/ancestors" % (thing)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_thing_derivatives(self, thing):
         """
@@ -534,7 +566,7 @@ class Thingiverse:
         """
         logging.debug('get_thing_derivatives')
         s = "/things/%d/derivatives" % (thing)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_thing_tags(self, thing):
         """
@@ -543,7 +575,7 @@ class Thingiverse:
         """
         logging.debug('get_thing_tags')
         s = "/things/%d/tags" % (thing)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_thing_category(self, thing):
         """
@@ -552,7 +584,7 @@ class Thingiverse:
         """
         logging.debug('get_thing_category')
         s = "/things/%d/categories" % (thing)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def update_thing(self, thing, data):
         """
@@ -624,7 +656,7 @@ class Thingiverse:
         """
         logging.debug('get_thing_copies')
         s = "/things/%d/copies" % (thing)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def upload_thing_copy_image(self, thing, data):
         """
@@ -665,8 +697,8 @@ class Thingiverse:
         returns the url
         """
         logging.debug('get_thing_zip')
-        s = "/things/%d/packageurl" % (thing)
-        return self._get_it(s, None)
+        s = "/things/%d/package-url" % (thing)
+        return self.get_it(s, None)
 
     def get_thing_prints(self, thing):
         """
@@ -675,7 +707,7 @@ class Thingiverse:
         """
         logging.debug('get_thing_prints')
         s = "/things/%d/printjobs" % (thing)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_thing_layouts(self, thing, layout_id):
         """
@@ -684,7 +716,7 @@ class Thingiverse:
         """
         logging.debug('get_thing_layouts')
         s = "/things/%d/layouts/%d" % (thing, layout_id)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     # Files
 
@@ -695,7 +727,7 @@ class Thingiverse:
         """
         logging.debug('get_file_info')
         s = "/files/%d/" % (file_id)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def finalize_file(self, file_id):
         """
@@ -717,7 +749,7 @@ class Thingiverse:
         """
         logging.debug('get_copy')
         s = "/copies/%d/" % (copy_id)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_copy_images(self, copy_id):
         """
@@ -726,7 +758,7 @@ class Thingiverse:
         """
         logging.debug('get_copy_images')
         s = "/copies/%d/images" % (copy_id)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def upload_copy_image(self, copy_id, data):
         """
@@ -810,7 +842,7 @@ class Thingiverse:
         """
         logging.debug('get_collection')
         s = "/collections/%d/" % (collection_id)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_things_collection(self, collection_id):
         """
@@ -819,7 +851,7 @@ class Thingiverse:
         """
         logging.debug('get_things_collection')
         s = "/collections/%d/things" % (collection_id)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def create_collection(self, data):
         """
@@ -881,7 +913,7 @@ class Thingiverse:
         """
         logging.debug('get_newest_things')
         s = "/newest/"
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     # Popular
 
@@ -891,7 +923,7 @@ class Thingiverse:
         """
         logging.debug('get_popular_things')
         s = "/popular/"
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     # Featured
 
@@ -901,7 +933,7 @@ class Thingiverse:
         """
         logging.debug('get_featured_things')
         s = "/featured/"
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     # Search
 
@@ -913,7 +945,7 @@ class Thingiverse:
         """
         logging.debug('keyword_search')
         s = "/search/%s/" % (term)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     # Categories
 
@@ -930,7 +962,7 @@ class Thingiverse:
         else:
             s = "/categories/%s" % (category_slug)
 
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_latest_category(self, category_slug):
         """
@@ -940,7 +972,7 @@ class Thingiverse:
         """
         logging.debug('get_latest_category')
         s = "/categories/%s/things" % (category_slug)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     # Tags
 
@@ -952,7 +984,7 @@ class Thingiverse:
         """
         logging.debug('get_latest_tag')
         s = "/tags/%s/things" % (tag)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
 
     def get_representation_tag(self, tag):
         """
@@ -960,4 +992,4 @@ class Thingiverse:
         """
         logging.debug('get_representation_tag')
         s = "/tags/%s/" % (tag)
-        return self._get_it(s, None)
+        return self.get_it(s, None)
