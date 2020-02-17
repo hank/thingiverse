@@ -51,14 +51,22 @@ class Thingiverse:
     def get_it(self, endpoint, data=None):
         logging.debug("GET {}".format(endpoint))
         if '//' not in endpoint:
-            url = self._service.base_url + endpoint
-            r = self._session.get(url, params=data)
-            # Handle stupid errors
-            if 'default backend -' in r.text:
-                print("Stupid error")
+            tries = 0
+            while tries < 10:
+                try:
+                    url = self._service.base_url + endpoint
+                    r = self._session.get(url, params=data)
+                    # Handle stupid errors
+                    if 'default backend -' in r.text:
+                        print("Stupid error")
+                        return None
+                    else:
+                        return r.json()
+                except:
+                    tries += 1
+                    logging.debug("Exception in GET, retrying")
+                # If we're here, we failed
                 return None
-            else:
-                return r.json()
         else:
             url = endpoint
             r = self._session.get(url, params=data)

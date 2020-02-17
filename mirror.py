@@ -37,7 +37,7 @@ else:
     logging.basicConfig(level=logging.INFO)
 
 stepsize = 500
-interval_between_fetchgroups = 1800
+interval_between_fetchgroups = 600
 for group in range(args.start, 2000000, stepsize):
     logging.info("Getting all things in range {}-{}".format(group, group+stepsize-1))
     for thing_id in range(group, group+stepsize):
@@ -67,44 +67,46 @@ for group in range(args.start, 2000000, stepsize):
                     f.write(json.dumps(c))
             # Get images
             images = a.get_thing_image(thing_id)
-            for i in images:
-                iid = i['id']
-                for s in i['sizes']:
-                    if s['size'] == 'large' and s['type'] == 'display':
-                        print("Downloading image {}: {}".format(iid, s['url']))
+            if images and 'error' not in images:
+                for i in images:
+                    iid = i['id']
+                    for s in i['sizes']:
+                        if s['size'] == 'large' and s['type'] == 'display':
+                            print("Downloading image {}: {}".format(iid, s['url']))
+                            try:
+                                iext = s['url'].split('.')[-1]
+                                fname = 'images/{}.{}'.format(iid, iext)
+                                if not os.path.exists(fname):
+                                    idata = requests.get(s['url'])
+                                    print("Received {} bytes".format(len(idata.content)))
+                                    with open(fname, 'wb') as f:
+                                        f.write(idata.content)
+                                else:
+                                    print("Image already exists")
+                            except:
+                                print("Exception downloading, moving on")
+                                import traceback
+                                traceback.print_exc()
+
+            i = a.get_thing_zip(thing_id)
+            if i and 'error' not in i:
+                fid = thing_id
+                fname = 'files/{}.zip'.format(fid)
+                if not os.path.exists(fname):
+                    if 'public_url' in i:
+                        print("Downloading file {}: {}".format(fid, i['public_url']))
                         try:
-                            iext = s['url'].split('.')[-1]
-                            fname = 'images/{}.{}'.format(iid, iext)
-                            if not os.path.exists(fname):
-                                idata = requests.get(s['url'])
-                                print("Received {} bytes".format(len(idata.content)))
-                                with open(fname, 'wb') as f:
-                                    f.write(idata.content)
-                            else:
-                                print("Image already exists")
+                            # fdata = a.get_it(i['public_url'])
+                            fdata = requests.get(i['public_url'])
+                            print("Received {} bytes".format(len(fdata.content)))
+                            with open(fname, 'wb') as f:
+                                f.write(fdata.content)
                         except:
                             print("Exception downloading, moving on")
                             import traceback
                             traceback.print_exc()
-
-            i = a.get_thing_zip(thing_id)
-            fid = thing_id
-            fname = 'files/{}.zip'.format(fid)
-            if not os.path.exists(fname):
-                if 'public_url' in i:
-                    print("Downloading file {}: {}".format(fid, i['public_url']))
-                    try:
-                        # fdata = a.get_it(i['public_url'])
-                        fdata = requests.get(i['public_url'])
-                        print("Received {} bytes".format(len(fdata.content)))
-                        with open(fname, 'wb') as f:
-                            f.write(fdata.content)
-                    except:
-                        print("Exception downloading, moving on")
-                        import traceback
-                        traceback.print_exc()
-            else:
-                print("File already exists")
+                else:
+                    print("File already exists")
         else:
             print("Error fetching, moving on")
     print("Group done, sleeping {} seconds...".format(interval_between_fetchgroups))
