@@ -55,7 +55,8 @@ class Thingiverse:
             while tries < 10:
                 try:
                     url = self._service.base_url + endpoint
-                    r = self._session.get(url, params=data)
+                    # Use global timeouts, connect and data in tuple
+                    r = self._session.get(url, params=data, timeout=(8, 120))
                     # Handle stupid errors
                     if 'default backend -' in r.text:
                         print("Stupid error")

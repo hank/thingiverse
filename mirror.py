@@ -77,7 +77,11 @@ for group in range(args.start, 2000000, stepsize):
                                 iext = s['url'].split('.')[-1]
                                 fname = 'images/{}.{}'.format(iid, iext)
                                 if not os.path.exists(fname):
-                                    idata = requests.get(s['url'])
+                                    idata = None
+                                    retries = 0
+                                    while idata is None and retries < 10:
+                                        idata = requests.get(s['url'], timeout=(8, 120))
+                                        retries += 1
                                     print("Received {} bytes".format(len(idata.content)))
                                     with open(fname, 'wb') as f:
                                         f.write(idata.content)
@@ -97,7 +101,11 @@ for group in range(args.start, 2000000, stepsize):
                         print("Downloading file {}: {}".format(fid, i['public_url']))
                         try:
                             # fdata = a.get_it(i['public_url'])
-                            fdata = requests.get(i['public_url'])
+                            fdata = None
+                            retries = 0
+                            while fdata is None and retries < 10:
+                                fdata = requests.get(i['public_url'], timeout=(8, 10000))
+                                retries += 1
                             print("Received {} bytes".format(len(fdata.content)))
                             with open(fname, 'wb') as f:
                                 f.write(fdata.content)
