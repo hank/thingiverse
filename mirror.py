@@ -100,15 +100,16 @@ for group in range(args.start, 2000000, stepsize):
                     if 'public_url' in i:
                         print("Downloading file {}: {}".format(fid, i['public_url']))
                         try:
-                            # fdata = a.get_it(i['public_url'])
-                            fdata = None
                             retries = 0
-                            while fdata is None and retries < 10:
-                                fdata = requests.get(i['public_url'], timeout=(8, 10000))
-                                retries += 1
-                            print("Received {} bytes".format(len(fdata.content)))
-                            with open(fname, 'wb') as f:
-                                f.write(fdata.content)
+                            with requests.get(i['public_url'], timeout=(8, 10000), stream=True) as r:
+                                r.raise_for_status()
+                                with open(fname, 'wb') as f:
+                                    clen = 0
+                                    for chunk in r.iter_content(chunk_size=65536):
+                                        if chunk: # filter out keep-alive new chunks
+                                            f.write(chunk)
+                                            clen += len(chunk)
+                                print("Received {} bytes".format(clen))
                         except:
                             print("Exception downloading, moving on")
                             import traceback
