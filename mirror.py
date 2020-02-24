@@ -36,87 +36,118 @@ else:
     print("Normal logging")
     logging.basicConfig(level=logging.INFO)
 
-stepsize = 500
-interval_between_fetchgroups = 600
-for group in range(args.start, 2000000, stepsize):
-    logging.info("Getting all things in range {}-{}".format(group, group+stepsize-1))
-    for thing_id in range(group, group+stepsize):
-        thing_fname = 'thing_json/{}.json'.format(thing_id)
-        if os.path.exists(thing_fname):
-            with open(thing_fname, 'r') as f:
-                t = f.read()
+max_api_calls = 1000
+interval_between_fetchgroups = 300
+api_calls = 0
+last_thing = args.start
+for thing_id in range(last_thing, 4000000):
+    thing_fname = 'thing_json/{}.json'.format(thing_id)
+    if os.path.exists(thing_fname):
+        with open(thing_fname, 'r') as f:
+            t = json.load(f)
+    else:
+        logging.info("Getting thing {}".format(thing_id))
+        while True:
+            try:
+                t = a.get_thing(thing_id)
+                api_calls += 1
+                break
+            except KeyboardInterrupt as e:
+                raise e
+            except:
+                logging.debug("Exception in get thing")
+    if t and 'error' not in t:
+        with open(thing_fname, 'w') as f:
+            f.write(json.dumps(t))
+        # Get comments
+        comments_fname = 'thing_comments_json/{}.json'.format(thing_id)
+        if os.path.exists(comments_fname):
+            with open(comments_fname, 'r') as f:
+                c = json.load(f)
         else:
-            logging.info("Getting thing {}".format(thing_id))
-            while True:
-                try:
-                    t = a.get_thing(thing_id)
-                    break
-                except:
-                    logging.debug("Exception in get thing")
-        if t and 'error' not in t:
-            with open(thing_fname, 'w') as f:
-                f.write(json.dumps(t))
-            # Get comments
-            comments_fname = 'thing_comments_json/{}.json'.format(thing_id)
-            if os.path.exists(comments_fname):
-                with open(comments_fname, 'r') as f:
-                    c = f.read()
-            else:
-                c = a.get_thing_comments(thing_id)
-                with open(comments_fname, 'w') as f:
-                    f.write(json.dumps(c))
-            # Get images
+            c = a.get_thing_comments(thing_id)
+            api_calls += 1
+            with open(comments_fname, 'w') as f:
+                f.write(json.dumps(c))
+                logging.info("Wrote comment json for thing {}".format(thing_id))
+        # Get images
+        image_json_fname = 'image_json/{}.json'.format(thing_id)
+        if os.path.exists(image_json_fname):
+            with open(image_json_fname, 'r') as f:
+                images = json.load(f)
+        else:
+            api_calls += 1
             images = a.get_thing_image(thing_id)
-            if images and 'error' not in images:
-                for i in images:
-                    iid = i['id']
-                    for s in i['sizes']:
-                        if s['size'] == 'large' and s['type'] == 'display':
-                            print("Downloading image {}: {}".format(iid, s['url']))
-                            try:
-                                iext = s['url'].split('.')[-1]
-                                fname = 'images/{}.{}'.format(iid, iext)
-                                if not os.path.exists(fname):
-                                    idata = None
-                                    retries = 0
-                                    while idata is None and retries < 10:
-                                        idata = requests.get(s['url'], timeout=(8, 120))
-                                        retries += 1
-                                    print("Received {} bytes".format(len(idata.content)))
-                                    with open(fname, 'wb') as f:
-                                        f.write(idata.content)
-                                else:
-                                    print("Image already exists")
-                            except:
-                                print("Exception downloading, moving on")
-                                import traceback
-                                traceback.print_exc()
+            # Save image json for later
+            with open(image_json_fname, 'w') as f:
+                f.write(json.dumps(images))
+                logging.info("Wrote image json for thing {}".format(thing_id))
 
-            i = a.get_thing_zip(thing_id)
-            if i and 'error' not in i:
-                fid = thing_id
-                fname = 'files/{}.zip'.format(fid)
-                if not os.path.exists(fname):
-                    if 'public_url' in i:
-                        print("Downloading file {}: {}".format(fid, i['public_url']))
+        if images and 'error' not in images:
+            for i in images:
+                iid = i['id']
+                for s in i['sizes']:
+                    if s['size'] == 'large' and s['type'] == 'display':
+                        print("Downloading image {}: {}".format(iid, s['url']))
                         try:
-                            retries = 0
-                            with requests.get(i['public_url'], timeout=(8, 10000), stream=True) as r:
-                                r.raise_for_status()
-                                with open(fname, 'wb') as f:
+                            iext = s['url'].split('.')[-1]
+                            fname = 'images/{}.{}'.format(iid, iext)
+                            if not os.path.exists(fname):
+                                try:
                                     clen = 0
-                                    for chunk in r.iter_content(chunk_size=65536):
-                                        if chunk: # filter out keep-alive new chunks
-                                            f.write(chunk)
-                                            clen += len(chunk)
-                                print("Received {} bytes".format(clen))
+                                    with requests.get(s['url'], timeout=(8, 10000), stream=True) as r:
+                                        r.raise_for_status()
+                                        with open(fname, 'wb') as f:
+                                            for chunk in r.iter_content(chunk_size=65536):
+                                                if chunk: # filter out keep-alive new chunks
+                                                    f.write(chunk)
+                                                    clen += len(chunk)
+                                    print("Received {} bytes".format(clen))
+                                except:
+                                    print("Exception downloading, moving on")
+                                    import traceback
+                                    traceback.print_exc()
+                            else:
+                                print("Image already exists")
+                        except KeyboardInterrupt as e:
+                            raise e
                         except:
                             print("Exception downloading, moving on")
                             import traceback
                             traceback.print_exc()
-                else:
-                    print("File already exists")
+
+        api_calls += 1
+        fid = thing_id
+        fname = 'files/{}.zip'.format(fid)
+        if not os.path.exists(fname):
+            i = a.get_thing_zip(thing_id)
+            if i and 'error' not in i:
+                if 'public_url' in i:
+                    print("Downloading file {}: {}".format(fid, i['public_url']))
+                    try:
+                        with requests.get(i['public_url'], timeout=(8, 10000), stream=True) as r:
+                            r.raise_for_status()
+                            with open(fname, 'wb') as f:
+                                clen = 0
+                                for chunk in r.iter_content(chunk_size=65536):
+                                    if chunk: # filter out keep-alive new chunks
+                                        f.write(chunk)
+                                        clen += len(chunk)
+                            print("Received {} bytes".format(clen))
+                    except KeyboardInterrupt as e:
+                        raise e
+                    except:
+                        print("Exception downloading, moving on")
+                        import traceback
+                        traceback.print_exc()
+            else:
+                print("Error getting zip")
         else:
-            print("Error fetching, moving on")
-    print("Group done, sleeping {} seconds...".format(interval_between_fetchgroups))
-    time.sleep(interval_between_fetchgroups)
+            print("File already exists")
+    else:
+        print("Error fetching, moving on")
+    last_thing += 1
+    if api_calls >= max_api_calls:
+        print("Max API calls reached, sleeping {} seconds...".format(interval_between_fetchgroups))
+        time.sleep(interval_between_fetchgroups)
+        api_calls = 0

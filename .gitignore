@@ -12,6 +12,7 @@ ACCESSTOKEN
 images
 thing_comments_json
 thing_json
+image_json
 files
 
 *.sqlite3

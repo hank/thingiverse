@@ -1,5 +1,5 @@
 # Copyright (c) 2014 Erin RobotGrrl <erin@robotgrrl.com>, MIT license
-import sys
+import sys, time
 from rauth import OAuth2Service
 import webbrowser
 import urllib
@@ -60,14 +60,17 @@ class Thingiverse:
                     # Handle stupid errors
                     if 'default backend -' in r.text:
                         print("Stupid error")
-                        return None
+                        time.sleep(1)
+                        raise RuntimeError('Stupid Error')
                     else:
                         return r.json()
+                except KeyboardInterrupt as e:
+                    raise e
                 except:
                     tries += 1
                     logging.debug("Exception in GET, retrying")
-                # If we're here, we failed
-                return None
+            # If we're here, we failed
+            return None
         else:
             url = endpoint
             r = self._session.get(url, params=data)
