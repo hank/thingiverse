@@ -15,5 +15,6 @@ thing_json
 image_json
 files
 user_avatars
+deadlist.bmp
 
 *.sqlite3

@@ -1,4 +1,5 @@
 import os, sys, time, logging, json, pickle
+from datetime import datetime
 import requests
 from bitmap import BitMap
 from pprint import PrettyPrinter
@@ -50,10 +51,15 @@ if args.deadmap:
 else:
     print("No deadmap")
 
-max_api_calls = 1500
-interval_between_fetchgroups = 300
+# API calls per window
+max_api_calls = 300
+# 5 minute windows
+window_seconds = 300
+
 api_calls = 0
 last_thing = args.start
+window_start_time = datetime.now()
+logging.info(f"Starting window at {window_start_time}")
 try:
     for thing_id in range(last_thing, 4000000):
         if DEADMAP.test(thing_id):
@@ -96,7 +102,7 @@ try:
                         f.write(json.dumps(c))
                         logging.info("Wrote comment json for thing {}".format(thing_id))
             # Get user avatars
-            if 'users' in c and isinstance(c['users'], dict):
+            if c and 'users' in c and isinstance(c['users'], dict):
                 for uid, u in c['users'].items():
                     if 'user_avatar' in u:
                         try:
@@ -210,9 +216,14 @@ try:
                 DEADMAP.set(thing_id)
         last_thing += 1
         if api_calls >= max_api_calls:
-            print("Max API calls reached, sleeping {} seconds...".format(interval_between_fetchgroups))
-            time.sleep(interval_between_fetchgroups)
+            window_left = window_seconds - (datetime.now() - window_start_time).total_seconds()
+            if window_left < 0:
+                window_left = 0
+            print("Max API calls reached for the window, sleeping {} seconds...".format(window_left))
+            time.sleep(window_left)
             api_calls = 0
+            window_start_time = datetime.now()
+            logging.info(f"Starting new window at {window_start_time}")
 except KeyboardInterrupt:
     print("Keyboard Interrupt!")
 finally:
