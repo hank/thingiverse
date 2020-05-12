@@ -5,6 +5,12 @@ from bitmap import BitMap
 from pprint import PrettyPrinter
 pp = PrettyPrinter(indent=4)
 from thingiverse import Thingiverse
+
+
+def dirname_from_id(i):
+    newfdr = str(i).zfill(8)[0:4]
+    return newfdr
+
 try:
     with open('CLIENTSECRET', 'r') as f:
         client_secret = f.read().strip()
@@ -66,7 +72,9 @@ try:
             logging.info("Skipping dead thing {}".format(thing_id))
             continue
         logging.info("Getting thing {}".format(thing_id))
-        thing_fname = 'thing_json/{}.json'.format(thing_id)
+        dn = dirname_from_id(thing_id)
+        os.makedirs(f'thing_json/{dn}', exist_ok=True)
+        thing_fname = f'thing_json/{dn}/{thing_id}.json'
         t = None
         try:
             if os.path.exists(thing_fname):
@@ -89,7 +97,9 @@ try:
             with open(thing_fname, 'w') as f:
                 f.write(json.dumps(t))
             # Get comments
-            comments_fname = 'thing_comments_json/{}.json'.format(thing_id)
+            dn = dirname_from_id(thing_id)
+            os.makedirs(f'thing_comments_json/{dn}', exist_ok=True)
+            comments_fname = f'thing_comments_json/{dn}/{thing_id}.json'
             if os.path.exists(comments_fname):
                 with open(comments_fname, 'r') as f:
                     c = json.load(f)
@@ -107,7 +117,9 @@ try:
                     if 'user_avatar' in u:
                         try:
                             uext = u['user_avatar'].split('.')[-1]
-                            fname = 'user_avatars/{}.{}'.format(uid, uext)
+                            dn = dirname_from_id(uid)
+                            os.makedirs(f'user_avatars/{dn}', exist_ok=True)
+                            fname = f'user_avatars/{dn}/{uid}.{uext}'
                             if not os.path.exists(fname):
                                 print("Downloading avatar {}: {}".format(uid, u['user_avatar']))
                                 try:
@@ -134,7 +146,9 @@ try:
                             traceback.print_exc()
                     
             # Get images
-            image_json_fname = 'image_json/{}.json'.format(thing_id)
+            dn = dirname_from_id(thing_id)
+            os.makedirs(f'image_json/{dn}', exist_ok=True)
+            image_json_fname = f'image_json/{dn}/{thing_id}.json'
             if os.path.exists(image_json_fname):
                 with open(image_json_fname, 'r') as f:
                     images = json.load(f)
@@ -155,7 +169,9 @@ try:
                         if s['size'] == 'large' and s['type'] == 'display':
                             try:
                                 iext = s['url'].split('.')[-1]
-                                fname = 'images/{}.{}'.format(iid, iext)
+                                dn = dirname_from_id(iid)
+                                os.makedirs(f'images/{dn}', exist_ok=True)
+                                fname = f'images/{dn}/{iid}.{iext}'
                                 if not os.path.exists(fname):
                                     print("Downloading image {}: {}".format(iid, s['url']))
                                     try:
@@ -181,7 +197,9 @@ try:
                                 import traceback
                                 traceback.print_exc()
             fid = thing_id
-            fname = 'files/{}.zip'.format(fid)
+            dn = dirname_from_id(fid)
+            os.makedirs(f'files/{dn}', exist_ok=True)
+            fname = f'files/{dn}/{fid}.zip'
             if not os.path.exists(fname):
                 i = a.get_thing_zip(thing_id)
                 logging.info("API CALL MADE")
