@@ -18,3 +18,6 @@ user_avatars
 deadlist.bmp
 
 *.sqlite3
+api.log.txt
+couchbase_creds.*
+

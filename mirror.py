@@ -1,4 +1,4 @@
-import os, sys, time, logging, json, pickle
+import os, sys, time, logging, json, pickle, urllib
 from datetime import datetime
 import requests
 from bitmap import BitMap
@@ -19,7 +19,8 @@ except IOError:
     sys.exit(2)
 a = Thingiverse({'client_id': '5ffba659ef3f0df1e4b0', 
                  'client_secret': client_secret, 
-                 'redirect_uri': 'http://foo'})
+                 'redirect_uri': 'http://foo'},
+                 loglevel='debug')
 
 token = None
 try:
@@ -67,7 +68,7 @@ last_thing = args.start
 window_start_time = datetime.now()
 logging.info(f"Starting window at {window_start_time}")
 try:
-    for thing_id in range(last_thing, 4000000):
+    for thing_id in range(last_thing, 5000000):
         if DEADMAP.test(thing_id):
             logging.info("Skipping dead thing {}".format(thing_id))
             continue
@@ -220,9 +221,27 @@ try:
                         except KeyboardInterrupt as e:
                             raise e
                         except:
-                            print("Exception downloading, moving on")
+                            print("Exception downloading, trying modified version")
                             import traceback
                             traceback.print_exc()
+                            o = urllib.parse.urlparse(i['public_url'])
+                            o = o._replace(netloc='cdn.thingiverse.com')
+                            new_url = urllib.parse.urlunparse(o)
+                            print("Downloading file {}: {}".format(fid, new_url))
+                            try:
+                                with requests.get(new_url, timeout=(8, 10000), stream=True) as r:
+                                    r.raise_for_status()
+                                    with open(fname, 'wb') as f:
+                                        clen = 0
+                                        for chunk in r.iter_content(chunk_size=65536):
+                                            if chunk: # filter out keep-alive new chunks
+                                                f.write(chunk)
+                                                clen += len(chunk)
+                                    print("Received {} bytes".format(clen))
+                            except KeyboardInterrupt as e:
+                                raise e
+                            except:
+                                print("Exception downloading, giving up")
                 else:
                     print("Error getting zip")
             else:

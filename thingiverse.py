@@ -710,7 +710,11 @@ class Thingiverse:
         """
         logging.debug('get_thing_zip')
         s = "/things/%d/package-url" % (thing)
-        return self.get_it(s, None)
+        # 2020: This started returning BS URLs that don't work.
+        # https://www.thingiverse.com/groups/thingiverse/forums/site-issues-and-feedback/topic:47322
+        # Modify by force.
+        out = self.get_it(s, None)
+        return out
 
     def get_thing_prints(self, thing):
         """
